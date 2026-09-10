@@ -34,6 +34,8 @@ In the cyber threat landscape, malicious actors rarely operate under a single id
 - **Dynamic Topological Graphing**: Interactive force-directed network graph where clusters represent resolved threat actors, and edges represent mathematically verified stylometric correlations.
 - **Adjustable Confidence Thresholding**: Analysts can dynamically tune correlation sensitivity (`0.30` to `0.95`, with optimal resolution at `0.62`), watching clusters merge or fracture in real time with **zero live inference latency**.
 - **Analyst Investigation Mode**: A structured intelligence workflow guiding analysts from target selection to automated candidate correlation, ending with a detailed Intelligence Report.
+- **Comprehensive Intelligence Reports**: Instantly compile stylometric, syntactic, and temporal evidence into formal, deployable threat intelligence reports.
+- **One-Click PDF Export**: Export generated reports to PDF for offline analysis, sharing with law enforcement, or including in broader SOC ticketing systems.
 - **"Explain This Link" Evidence Dossier**: Clicking any edge provides an explainable breakdown of the correlation using granular signals (Semantic, Lexical, Syntactic, Punctuation, Temporal), supporting vs. contradictory evidence, and pairwise statistics.
 - **Threat Actor Evolution Timeline**: Automatically maps out historical post activity to determine if connected aliases operated concurrently or represent a sequential identity handover.
 - **Confidence Scoring System**: Translates raw mathematical similarity into actionable intelligence classifications (Weak, Possible, Probable, High-Confidence).

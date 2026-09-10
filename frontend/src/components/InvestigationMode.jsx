@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronRight, Fingerprint, ShieldAlert, FileText, CheckCircle2, FileSearch, ArrowLeft, Download } from 'lucide-react';
 import { resolveAlias, fetchAliasDetail } from '../api/client';
+import html2pdf from 'html2pdf.js';
 const TemporalTimeline = ({ targetPosts, candidatePosts, targetId, candidateId }) => {
   if (!targetPosts?.length || !candidatePosts?.length) return null;
 
@@ -136,6 +137,21 @@ export default function InvestigationMode({ allNodes, onExit }) {
   const handleGenerateReport = () => {
     setReportGenerated(true);
     setStep(5);
+  };
+
+  const handleExportPDF = () => {
+    const element = document.getElementById('report-content');
+    if (!element) return;
+    
+    const opt = {
+      margin:       0.5,
+      filename:     `AEGIS-Report-${selectedAliasId}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0f1019' },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    
+    html2pdf().set(opt).from(element).save();
   };
 
   const filteredNodes = allNodes.filter(n => n.id.toLowerCase().includes(searchQuery.toLowerCase()) || n.username.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -358,13 +374,13 @@ export default function InvestigationMode({ allNodes, onExit }) {
             exit={{ opacity: 0, y: 50 }}
             className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-10"
           >
-            <div className="bg-[#0f1019] border border-cyan-500/50 rounded-2xl w-full max-w-3xl max-h-full flex flex-col shadow-[0_0_40px_rgba(6,182,212,0.15)] overflow-hidden">
+            <div className="bg-[#0f1019] border border-cyan-500/50 rounded-2xl w-full max-w-3xl max-h-full flex flex-col shadow-[0_0_40px_rgba(6,182,212,0.15)] overflow-hidden" id="report-content">
               <div className="p-6 border-b border-[#1e1e2f] flex justify-between items-center bg-[#151624]">
                 <h2 className="text-xl font-bold text-white font-mono flex items-center gap-2">
                   <FileText className="w-6 h-6 text-cyan-400" />
                   INTELLIGENCE REPORT
                 </h2>
-                <button onClick={() => setReportGenerated(false)} className="text-gray-400 hover:text-white">Close</button>
+                <button onClick={() => setReportGenerated(false)} data-html2canvas-ignore className="text-gray-400 hover:text-white">Close</button>
               </div>
               <div className="p-8 overflow-y-auto font-mono text-sm space-y-6 text-gray-300">
                 <div className="flex justify-between text-xs text-gray-500 border-b border-[#1e1e2f] pb-4">
@@ -419,8 +435,8 @@ export default function InvestigationMode({ allNodes, onExit }) {
                   </p>
                 </div>
                 
-                <div className="flex justify-end pt-4">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-[#1a1b2e] hover:bg-[#23243a] border border-[#2e2f4a] rounded-lg text-white font-bold transition-colors">
+                <div className="flex justify-end pt-4" data-html2canvas-ignore>
+                  <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-[#1a1b2e] hover:bg-[#23243a] border border-[#2e2f4a] rounded-lg text-white font-bold transition-colors">
                     <Download className="w-4 h-4" /> Export PDF
                   </button>
                 </div>
