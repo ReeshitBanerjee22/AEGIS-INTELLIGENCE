@@ -44,34 +44,6 @@ export async function resolveAlias(aliasId, threshold = 0.55, compareAll = false
   return await res.json();
 }
 
-/**
- * Demo: Inject held-back staged alias into live graph.
- */
-export async function injectAlias(aliasId = null) {
-  const body = aliasId ? JSON.stringify({ alias_id: aliasId }) : undefined;
-  const res = await fetch(`${BASE_URL}/inject`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to inject alias: ${res.statusText}`);
-  }
-  return await res.json();
-}
-
-/**
- * Demo: Reset the environment state back to initial (holding back staged aliases).
- */
-export async function resetDemo() {
-  const res = await fetch(`${BASE_URL}/reset-demo`, {
-    method: 'POST'
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to reset demo: ${res.statusText}`);
-  }
-  return await res.json();
-}
 
 /**
  * Explain a pairwise link between two aliases in detail.
@@ -80,6 +52,18 @@ export async function fetchExplanation(aliasA, aliasB) {
   const res = await fetch(`${BASE_URL}/explain/${aliasA}/${aliasB}`);
   if (!res.ok) {
     throw new Error(`Failed to explain link ${aliasA}-${aliasB}: ${res.statusText}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Fetch the full NxN pairwise similarity matrix with alias labels.
+ * Used by the SimilarityHeatmap component.
+ */
+export async function fetchHeatmap() {
+  const res = await fetch(`${BASE_URL}/heatmap`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch heatmap: ${res.statusText}`);
   }
   return await res.json();
 }

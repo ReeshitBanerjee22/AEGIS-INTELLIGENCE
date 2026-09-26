@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import app.main as main_app
@@ -7,8 +7,46 @@ from datetime import datetime
 
 router = APIRouter()
 
-class InjectRequest(BaseModel):
-    alias_id: Optional[str] = None
+
+@router.get("/heatmap")
+def get_heatmap():
+    """
+    Returns the full NxN pairwise similarity matrix for all active aliases,
+    along with alias metadata (id, username, platform) for axis labels.
+    Used by the Similarity Score Heatmap visualisation on the frontend.
+    """
+    state = main_app.state
+
+    # Ordered list of active alias ids (matrix order preserved)
+    active_ids = [aid for aid in state.alias_ids if aid in state.active_alias_ids]
+
+    labels = []
+    for aid in active_ids:
+        alias = state.aliases_dict.get(aid, {})
+        labels.append({
+            "id": aid,
+            "username": alias.get("username", aid),
+            "platform": alias.get("platform", ""),
+        })
+
+    # Build NxN submatrix for active aliases only
+    full_matrix = state.matrix
+    aid_to_idx = state.alias_id_to_idx
+
+    matrix = []
+    for row_id in active_ids:
+        row = []
+        ri = aid_to_idx[row_id]
+        for col_id in active_ids:
+            ci = aid_to_idx[col_id]
+            row.append(round(full_matrix[ri][ci], 4))
+        matrix.append(row)
+
+    return {
+        "labels": labels,
+        "matrix": matrix,
+    }
+
 
 def compute_connected_components(active_aids: List[str], matrix: List[List[float]], aid_to_idx: Dict[str, int], threshold: float):
     """
@@ -123,7 +161,6 @@ def get_graph(threshold: float = Query(0.62, ge=0.0, le=1.0)):
         "nodes": nodes,
         "edges": edges,
         "clusters": clusters,
-        "staged_aliases": [aid for aid in state.staged_inject_pool if aid not in state.active_alias_ids]
     }
 
 
@@ -195,93 +232,6 @@ def resolve_alias(alias_id: str, threshold: float = Query(0.62, ge=0.0, le=1.0),
         "matches": matches
     }
 
-
-@router.post("/inject")
-def inject_alias(req: Optional[InjectRequest] = None):
-    """
-    Demo-only: Inject a held-back alias from the pre-staged pool into the live graph.
-    Returns the newly added node and its resolved edges with evidence.
-    """
-    state = main_app.state
-    available_staged = [aid for aid in state.staged_inject_pool if aid not in state.active_alias_ids]
-    
-    target_aid = None
-    if req and req.alias_id:
-        target_aid = req.alias_id
-    elif available_staged:
-        target_aid = available_staged[0]
-    else:
-        # If all already injected, return status
-        return {
-            "status": "exhausted",
-            "message": "All staged aliases have already been injected into the live graph.",
-            "injected_node": None,
-            "new_edges": [],
-            "remaining_staged": []
-        }
-
-    if target_aid not in state.aliases_dict:
-        raise HTTPException(status_code=404, detail=f"Alias '{target_aid}' not in dataset")
-
-    # Add to active set
-    state.active_alias_ids.add(target_aid)
-    
-    alias = state.aliases_dict[target_aid]
-    target_idx = state.alias_id_to_idx[target_aid]
-
-    # Find edges with other active nodes at threshold 0.62
-    new_edges = []
-    for other_aid in state.active_alias_ids:
-        if other_aid == target_aid:
-            continue
-        other_idx = state.alias_id_to_idx[other_aid]
-        score = state.matrix[target_idx][other_idx]
-        key = f"{target_aid}-{other_aid}"
-        ev = state.evidence_dict.get(key, state.evidence_dict.get(f"{other_aid}-{target_aid}", {}))
-        
-        new_edges.append({
-            "source": target_aid,
-            "target": other_aid,
-            "score": round(score, 4),
-            "evidence": ev
-        })
-
-    # Sort edges descending by score
-    new_edges.sort(key=lambda x: -x["score"])
-
-    remaining = [aid for aid in state.staged_inject_pool if aid not in state.active_alias_ids]
-
-    return {
-        "status": "success",
-        "injected_alias_id": target_aid,
-        "injected_node": {
-            "id": target_aid,
-            "alias_id": target_aid,
-            "username": alias["username"],
-            "platform": alias["platform"],
-            "post_count": len(alias.get("posts", []))
-        },
-        "resolved_edges": [e for e in new_edges if e["score"] >= 0.62],
-        "all_pairwise_scores": new_edges,
-        "remaining_staged": remaining
-    }
-
-
-@router.post("/reset-demo")
-def reset_demo():
-    """Reset active aliases back to initial state (holding back staged aliases)."""
-    state = main_app.state
-    state.active_alias_ids.clear()
-    for persona in state.personas_raw.get("personas", []):
-        for alias in persona.get("aliases", []):
-            aid = alias["alias_id"]
-            if not alias.get("held_back", False):
-                state.active_alias_ids.add(aid)
-    return {
-        "status": "reset",
-        "active_count": len(state.active_alias_ids),
-        "staged_pool": state.staged_inject_pool
-    }
 
 def extract_words(text: str) -> set:
     words = re.findall(r"[a-z0-9']+", text.lower())

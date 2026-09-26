@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Shield, Search, Terminal, Database, RefreshCw,
-  ArrowLeft, Crosshair, Layers, Sliders, Zap,
+  ArrowLeft, Crosshair, Sliders, BarChart2,
 } from 'lucide-react';
 import LandingPage from './components/LandingPage';
 import Graph from './components/Graph';
 import ThresholdSlider from './components/ThresholdSlider';
 import EvidencePanel from './components/EvidencePanel';
 import ClusterCards from './components/ClusterCards';
-import InjectButton from './components/InjectButton';
 import InvestigationMode from './components/InvestigationMode';
 import SideSection from './components/SideSection';
-import { fetchGraph, fetchAliasDetail, resolveAlias, injectAlias, resetDemo } from './api/client';
+import SimilarityHeatmap from './components/SimilarityHeatmap';
+import { fetchGraph, fetchAliasDetail, resolveAlias } from './api/client';
 
 export default function App() {
   const [currentView, setCurrentView] = useState('landing');
   const [threshold, setThreshold] = useState(0.55);
-  const [graphData, setGraphData] = useState({ nodes: [], edges: [], clusters: [], staged_aliases: [] });
+  const [graphData, setGraphData] = useState({ nodes: [], edges: [], clusters: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -26,8 +26,7 @@ export default function App() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState('node');
   const [highlightClusterId, setHighlightClusterId] = useState(null);
-  const [recentlyInjectedId, setRecentlyInjectedId] = useState(null);
-  const [isInjecting, setIsInjecting] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const debounceRef = useRef(null);
 
@@ -79,29 +78,7 @@ export default function App() {
     if (node) handleNodeClick(node);
   };
 
-  const handleInject = async () => {
-    setIsInjecting(true);
-    try {
-      const res = await injectAlias();
-      if (res?.injected_alias_id) {
-        setRecentlyInjectedId(res.injected_alias_id);
-        await loadGraph(threshold);
-        setTimeout(() => {
-          const t = graphData.nodes.find(n => n.id === res.injected_alias_id);
-          if (t) handleNodeClick(t);
-        }, 300);
-        setTimeout(() => setRecentlyInjectedId(null), 5000);
-      }
-      return res;
-    } finally { setIsInjecting(false); }
-  };
 
-  const handleReset = async () => {
-    await resetDemo();
-    setSelectedNode(null); setSelectedEdge(null);
-    setIsPanelOpen(false); setHighlightClusterId(null);
-    await loadGraph(threshold);
-  };
 
   const filteredNodes = graphData.nodes.filter(n =>
     n.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -111,6 +88,7 @@ export default function App() {
 
   if (currentView === 'landing') return <LandingPage onEnterDashboard={() => setCurrentView('dashboard')} />;
   if (currentView === 'investigation') return <InvestigationMode allNodes={graphData.nodes} onExit={() => setCurrentView('dashboard')} />;
+  if (currentView === 'heatmap') return <SimilarityHeatmap threshold={threshold} onClose={() => setCurrentView('dashboard')} />;
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0a0b0d] text-[#cdd6e0] overflow-hidden" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -126,8 +104,8 @@ export default function App() {
           </button>
           <div className="h-4 w-px bg-[#1e252e]" />
           <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-[#00d4aa]" />
-            <span className="font-mono text-[11px] font-bold tracking-[0.15em] text-[#00d4aa] uppercase">
+            <div className="w-px h-4 bg-[#1e252e]" />
+            <span className="font-mono text-[11px] font-bold tracking-[0.15em] text-[#cdd6e0] uppercase">
               AEGIS-INTELLIGENCE
             </span>
             <span className="font-mono text-[10px] text-[#2a3340] border border-[#1e252e] px-1.5">
@@ -143,9 +121,8 @@ export default function App() {
             </span>
           )}
           <div className="flex items-center gap-1.5 border-l border-[#1e252e] pl-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#00d4aa] animate-pulse" />
-            <span className="text-[#5a6a7a]">BACKEND</span>
-            <span className="text-[#00d4aa]">ONLINE</span>
+            <span className="w-1.5 h-1.5 bg-[#00d4aa]/60" />
+            <span className="text-[#5a6a7a]">BACKEND <span className="text-[#8899aa]">ONLINE</span></span>
           </div>
           <div className="flex items-center gap-1.5 border-l border-[#1e252e] pl-3 text-[#5a6a7a]">
             NODES <span className="text-[#cdd6e0] font-bold">{graphData.nodes.length}</span>
@@ -153,6 +130,14 @@ export default function App() {
           <div className="flex items-center gap-1.5 border-l border-[#1e252e] pl-3 text-[#5a6a7a]">
             CLUSTERS <span className="text-[#cdd6e0] font-bold">{graphData.clusters.length}</span>
           </div>
+          <button
+            onClick={() => setCurrentView('heatmap')}
+            className="flex items-center gap-1.5 border-l border-[#1e252e] pl-3 text-[#5a6a7a] hover:text-[#00d4aa] transition-colors"
+            title="Similarity Score Heatmap"
+          >
+            <BarChart2 className="w-3 h-3" />
+            <span>HEATMAP</span>
+          </button>
         </div>
       </header>
 
@@ -171,17 +156,7 @@ export default function App() {
             />
           </SideSection>
 
-          <SideSection title="Inject" icon={Zap} defaultOpen={false}>
-            <p className="font-mono text-[10px] text-[#5a6a7a] mb-2 leading-relaxed">
-              Inject held-back aliases into the active graph.
-            </p>
-            <InjectButton
-              stagedAliases={graphData.staged_aliases || []}
-              isInjecting={isInjecting}
-              onInject={handleInject}
-              onReset={handleReset}
-            />
-          </SideSection>
+
 
           <SideSection title="Workflow" icon={Crosshair} defaultOpen={false}>
             <button
@@ -252,7 +227,7 @@ export default function App() {
               selectedNode={selectedNode}
               selectedEdge={selectedEdge}
               highlightCluster={highlightClusterId}
-              injectedNodeId={recentlyInjectedId}
+
               onNodeClick={handleNodeClick}
               onEdgeClick={handleEdgeClick}
               onBackgroundClick={handleBackgroundClick}
